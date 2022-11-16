@@ -113,3 +113,12 @@ class Moltin:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         return response.json()
+
+    def get_cart_items(self, user_id):
+        """Получает список продуктов в корзине пользователя."""
+
+        url = f'https://api.moltin.com/v2/carts/{user_id}/items'
+        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
