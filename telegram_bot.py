@@ -8,13 +8,14 @@ from functools import partial
 
 import redis
 from dotenv import load_dotenv
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, CommandHandler, Filters, MessageHandler, Updater
 
 from moltin import Moltin
 from telegram_log_handler import TelegramLogsHandler
 
 
-START, ECHO = range(1, 3)
+START, KEYBOARD = range(1, 3)
 
 logger = logging.getLogger('fish_shop_bot.logger')
 
@@ -48,9 +49,8 @@ def handle_users_reply(update, context, redis_client):
 
     states_functions = {
         START: handle_start_command,
-        ECHO: handle_echo
+        KEYBOARD: handle_keyboard
     }
-    print(states_functions)
     user_state = START if user_reply == '/start' else redis_client.get(chat_id) or START
     state_handler = states_functions[int(user_state)]
 
@@ -65,15 +65,42 @@ def handle_start_command(update, context):
     """Обрабатывает состояние START."""
 
     update.message.reply_text(text='Привет!')
-    return ECHO
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Привет! Я бот магазина рыбы!\nНажми клавишу',
+        reply_markup=get_keyboard_markup()
+    )
+    return KEYBOARD
 
 
-def handle_echo(update, context):
-    """Обрабатывает состояние ECHO."""
+def handle_keyboard(update, context):
+    """Обрабатывает состояние KEYBOARD."""
 
-    users_reply = update.message.text
-    update.message.reply_text(users_reply)
-    return ECHO
+    if update.callback_query:
+        text = f'Нажата клавиша {update.callback_query.data}. Нажми клавишу.'
+        update.callback_query.answer()
+    else:
+        text = f'Написано "{update.message.text}". Нажми клавишу.'
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        reply_markup=get_keyboard_markup()
+    )
+    return KEYBOARD
+
+
+def get_keyboard_markup():
+    """Возвращает InlineKeyboardMarkup со встроенной клавиатурой."""
+
+    keyboard = [
+        [
+            InlineKeyboardButton('1', callback_data='1'),
+            InlineKeyboardButton('2', callback_data='2'),
+        ],      
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 
 def handle_error(update, context, error):
     """Обрабатывает возникающие ошибки."""
