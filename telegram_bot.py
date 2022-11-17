@@ -20,22 +20,23 @@ START, KEYBOARD = range(1, 3)
 logger = logging.getLogger('fish_shop_bot.logger')
 
 
-def run_telegram_bot(tg_bot_token, redis_client):
+def run_telegram_bot(tg_bot_token, moltin, redis_client):
     """Запускает telegram-бота и организует его работу."""
 
     updater = Updater(tg_bot_token)
     dispatcher = updater.dispatcher
 
-    dispatcher.add_handler(CallbackQueryHandler(partial(handle_users_reply, redis_client=redis_client)))
-    dispatcher.add_handler(MessageHandler(Filters.text, partial(handle_users_reply, redis_client=redis_client)))
-    dispatcher.add_handler(CommandHandler('start', partial(handle_users_reply, redis_client=redis_client)))
+    handler = partial(handle_users_reply, moltin=moltin, redis_client=redis_client)
+    dispatcher.add_handler(CallbackQueryHandler(handler))
+    dispatcher.add_handler(MessageHandler(Filters.text, handler))
+    dispatcher.add_handler(CommandHandler('start', handler))
     dispatcher.add_error_handler(handle_error)
 
     updater.start_polling()
     updater.idle()
 
 
-def handle_users_reply(update, context, redis_client):
+def handle_users_reply(update, context, moltin, redis_client):
     """Функция, обрабатывающая все действия пользователя."""
 
     if update.message:
@@ -55,25 +56,25 @@ def handle_users_reply(update, context, redis_client):
     state_handler = states_functions[int(user_state)]
 
     try:
-        next_state = state_handler(update, context)
+        next_state = state_handler(update, context, moltin)
         redis_client.set(chat_id, next_state)
     except Exception as err:
         print(err)
 
 
-def handle_start_command(update, context):
+def handle_start_command(update, context, moltin):
     """Обрабатывает состояние START."""
 
     update.message.reply_text(text='Привет!')
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Привет! Я бот магазина рыбы!\nНажми клавишу',
-        reply_markup=get_keyboard_markup()
+        reply_markup=get_keyboard_markup(moltin)
     )
     return KEYBOARD
 
 
-def handle_keyboard(update, context):
+def handle_keyboard(update, context, moltin):
     """Обрабатывает состояние KEYBOARD."""
 
     if update.callback_query:
@@ -85,19 +86,18 @@ def handle_keyboard(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=text,
-        reply_markup=get_keyboard_markup()
+        reply_markup=get_keyboard_markup(moltin)
     )
     return KEYBOARD
 
 
-def get_keyboard_markup():
-    """Возвращает InlineKeyboardMarkup со встроенной клавиатурой."""
+def get_keyboard_markup(moltin):
+    """Возвращает встроенную клавиатуру InlineKeyboardMarkup со списком продуктов магазина."""
 
     keyboard = [
-        [
-            InlineKeyboardButton('1', callback_data='1'),
-            InlineKeyboardButton('2', callback_data='2'),
-        ],      
+        [InlineKeyboardButton(product['name'], callback_data=product['id'])]
+        for product in moltin.get_all_products()['data']
+        if product['type'] == 'product'
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -111,22 +111,19 @@ def handle_error(update, context, error):
 def main():
     load_dotenv()
     tg_bot_token = os.environ['TELEGRAM_BOT_TOKEN']
-    tg_moderator_chat_id = os.environ['TELEGRAM_MODERATOR_CHAT_ID']
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
     logger.setLevel(logging.INFO)
-    logger.addHandler(TelegramLogsHandler(tg_bot_token, tg_moderator_chat_id))
+    logger.addHandler(TelegramLogsHandler(tg_bot_token, os.environ['TELEGRAM_MODERATOR_CHAT_ID']))
 
+    moltin = Moltin(os.environ['MOLTIN_CLIENT_ID'], os.environ['MOLTIN_CLIENT_SECRET'])
     redis_client = redis.StrictRedis(
         host=os.environ['REDIS_DB_HOST'],
         port=os.environ['REDIS_DB_PORT'],
         password=os.environ['REDIS_DB_PASSWORD'],
         decode_responses=True
     )
-
-    run_telegram_bot(tg_bot_token, redis_client)
-
-    # moltin = Moltin(os.environ['MOLTIN_CLIENT_ID'], os.environ['MOLTIN_CLIENT_SECRET'])
+    run_telegram_bot(tg_bot_token, moltin, redis_client)
 
 
 if __name__ == '__main__':
