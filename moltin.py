@@ -99,6 +99,13 @@ class Moltin:
         response.raise_for_status()
         return response.json()
 
+    def get_image_by_id(self, image_id):
+        url = f'https://api.moltin.com/v2/files/{image_id}'
+        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()['data']['link']['href']
+
     def link_image_to_product(self, product_id, image_id):
         url = f'https://api.moltin.com/v2/products/{product_id}/relationships/main-image'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}

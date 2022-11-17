@@ -65,7 +65,6 @@ def handle_users_reply(update, context, moltin, redis_client):
 def handle_start_command(update, context, moltin):
     """Handle the START state."""
 
-    update.message.reply_text(text='Привет!')
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="Hello! I'm a fish shop bot!\nPress a button.",
@@ -80,12 +79,28 @@ def handle_menu(update, context, moltin):
     if not update.callback_query:
         return START
 
-    update.callback_query.answer()
+    query = update.callback_query
+    query.answer()
+
     product_id = update.callback_query.data
-    product_description = moltin.get_product_by_id(product_id)['data']['description']
-    context.bot.send_message(
+    product_details = moltin.get_product_by_id(product_id)['data']
+    product_name = product_details['name']
+    product_description = product_details['description']
+    product_price = f"Price: ${product_details['price'][0]['amount'] / 100} per pound"
+
+    image_id = product_details['relationships']['main_image']['data']['id']
+    image = moltin.get_image_by_id(image_id)
+
+    context.bot.send_photo(
         chat_id=update.effective_chat.id,
-        text=product_description,
+        photo=image,
+        caption=f'\n\n*{product_name}*\n\n{product_description}\n\n{product_price}',
+        parse_mode='Markdown'
+    )
+
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=query.message.message_id
     )
     return START
 
