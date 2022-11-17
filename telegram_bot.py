@@ -1,6 +1,6 @@
 # coding=utf-8
 
-"""Организует работу telegram-бота магазина рыбы."""
+"""Organize the work of the fish shop telegram bot."""
 
 import logging
 import os
@@ -21,7 +21,7 @@ logger = logging.getLogger('fish_shop_bot.logger')
 
 
 def run_telegram_bot(tg_bot_token, moltin, redis_client):
-    """Запускает telegram-бота и организует его работу."""
+    """Launch a telegram bot and organize its work."""
 
     updater = Updater(tg_bot_token)
     dispatcher = updater.dispatcher
@@ -37,7 +37,7 @@ def run_telegram_bot(tg_bot_token, moltin, redis_client):
 
 
 def handle_users_reply(update, context, moltin, redis_client):
-    """Функция, обрабатывающая все действия пользователя."""
+    """Handle all user actions."""
 
     if update.message:
         user_reply = update.message.text
@@ -63,19 +63,19 @@ def handle_users_reply(update, context, moltin, redis_client):
 
 
 def handle_start_command(update, context, moltin):
-    """Обрабатывает состояние START."""
+    """Handle the START state."""
 
     update.message.reply_text(text='Привет!')
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Привет! Я бот магазина рыбы!\nНажми клавишу',
-        reply_markup=get_keyboard_markup(moltin)
+        text="Hello! I'm a fish shop bot!\nPress a button.",
+        reply_markup=create_keyboard_markup(moltin)
     )
     return HANDLE_MENU
 
 
 def handle_menu(update, context, moltin):
-    """Обрабатывает состояние HANDLE_MENU."""
+    """Handle the HANDLE_MENU state."""
 
     if not update.callback_query:
         return START
@@ -90,8 +90,8 @@ def handle_menu(update, context, moltin):
     return START
 
 
-def get_keyboard_markup(moltin):
-    """Возвращает встроенную клавиатуру InlineKeyboardMarkup со списком продуктов магазина."""
+def create_keyboard_markup(moltin):
+    """Create an InlineKeyboardMarkup with a list of all shop products."""
 
     keyboard = [
         [InlineKeyboardButton(product['name'], callback_data=product['id'])]
@@ -102,7 +102,7 @@ def get_keyboard_markup(moltin):
 
 
 def handle_error(update, context, error):
-    """Обрабатывает возникающие ошибки."""
+    """Handle errors."""
 
     logger.warning(f'Update "{update}" вызвал ошибку "{error}"')
 
@@ -116,12 +116,14 @@ def main():
     logger.addHandler(TelegramLogsHandler(tg_bot_token, os.environ['TELEGRAM_MODERATOR_CHAT_ID']))
 
     moltin = Moltin(os.environ['MOLTIN_CLIENT_ID'], os.environ['MOLTIN_CLIENT_SECRET'])
+
     redis_client = redis.StrictRedis(
         host=os.environ['REDIS_DB_HOST'],
         port=os.environ['REDIS_DB_PORT'],
         password=os.environ['REDIS_DB_PASSWORD'],
         decode_responses=True
     )
+
     run_telegram_bot(tg_bot_token, moltin, redis_client)
 
 
