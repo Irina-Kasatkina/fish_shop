@@ -38,7 +38,7 @@ class Moltin:
         return self._token
 
     def create_product(self, product_details):
-        """Создаёт продукт в магазине."""
+        """Создаёт товар в магазине."""
 
         url = 'https://api.moltin.com/v2/products'
         headers = {
@@ -69,7 +69,7 @@ class Moltin:
         return response.json()
 
     def create_products_from_json(self, json_file_path):
-        """Создаёт продукты в магазине из json-файла."""
+        """Создаёт товары в магазине из json-файла."""
 
         with open(json_file_path, 'r', encoding='utf-8') as json_file:
             products_details = json.loads(json_file.read())
@@ -78,7 +78,7 @@ class Moltin:
             self.create_product(product_details)
 
     def get_all_products(self):
-        """Получает список всех продуктов магазина."""
+        """Получает список всех товаров магазина."""
 
         url = 'https://api.moltin.com/v2/products'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}
@@ -86,8 +86,17 @@ class Moltin:
         response.raise_for_status()
         return response.json()
 
+    def get_product_by_id(self, product_id):
+        """Получает товар по его id."""
+
+        url = f'https://api.moltin.com/v2/products/{product_id}'
+        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
     def add_product_to_cart(self, user_id, product_id, quantity):
-        """Кладёт продукт в корзину пользователя в указанном количестве."""
+        """Кладёт товар в корзину пользователя в указанном количестве."""
 
         url = f'https://api.moltin.com/v2/carts/{user_id}/items'
         headers = {
@@ -115,7 +124,7 @@ class Moltin:
         return response.json()
 
     def get_cart_items(self, user_id):
-        """Получает список продуктов в корзине пользователя."""
+        """Получает список товаров в корзине пользователя."""
 
         url = f'https://api.moltin.com/v2/carts/{user_id}/items'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}

@@ -15,7 +15,7 @@ from moltin import Moltin
 from telegram_log_handler import TelegramLogsHandler
 
 
-START, KEYBOARD = range(1, 3)
+START, HANDLE_MENU = range(1, 3)
 
 logger = logging.getLogger('fish_shop_bot.logger')
 
@@ -50,7 +50,7 @@ def handle_users_reply(update, context, moltin, redis_client):
 
     states_functions = {
         START: handle_start_command,
-        KEYBOARD: handle_keyboard
+        HANDLE_MENU: handle_menu
     }
     user_state = START if user_reply == '/start' else redis_client.get(chat_id) or START
     state_handler = states_functions[int(user_state)]
@@ -71,24 +71,23 @@ def handle_start_command(update, context, moltin):
         text='Привет! Я бот магазина рыбы!\nНажми клавишу',
         reply_markup=get_keyboard_markup(moltin)
     )
-    return KEYBOARD
+    return HANDLE_MENU
 
 
-def handle_keyboard(update, context, moltin):
-    """Обрабатывает состояние KEYBOARD."""
+def handle_menu(update, context, moltin):
+    """Обрабатывает состояние HANDLE_MENU."""
 
-    if update.callback_query:
-        text = f'Нажата клавиша {update.callback_query.data}. Нажми клавишу.'
-        update.callback_query.answer()
-    else:
-        text = f'Написано "{update.message.text}". Нажми клавишу.'
+    if not update.callback_query:
+        return START
 
+    update.callback_query.answer()
+    product_id = update.callback_query.data
+    product_description = moltin.get_product_by_id(product_id)['data']['description']
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=text,
-        reply_markup=get_keyboard_markup(moltin)
+        text=product_description,
     )
-    return KEYBOARD
+    return START
 
 
 def get_keyboard_markup(moltin):
