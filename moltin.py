@@ -137,8 +137,8 @@ class Moltin:
         response.raise_for_status()
         return response.json()
 
-    def add_product_to_cart(self, user_id, product_id, quantity):
-        """Put the product in the user's cart in the specified quantity."""
+    def add_item_to_cart(self, user_id, product_id, quantity):
+        """Put item to user's cart in specified quantity."""
 
         url = f'https://api.moltin.com/v2/carts/{user_id}/items'
         headers = {
@@ -156,8 +156,16 @@ class Moltin:
         response.raise_for_status()
         return response.json()
 
+    def delete_item_from_cart(self, user_id, product_id):
+        """Exclude item from user's cart."""
+
+        url = f'https://api.moltin.com/v2/carts/{user_id}/items/{product_id}'
+        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
+        response = requests.delete(url, headers=headers)
+        response.raise_for_status()
+
     def get_cart(self, user_id):
-        """Get a user's cart."""
+        """Get user's cart."""
 
         url = f'https://api.moltin.com/v2/carts/{user_id}'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}
@@ -166,7 +174,7 @@ class Moltin:
         return response.json()
 
     def get_cart_items(self, user_id):
-        """Get a list of items in the user's cart."""
+        """Get list of items in user's cart."""
 
         url = f'https://api.moltin.com/v2/carts/{user_id}/items'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}

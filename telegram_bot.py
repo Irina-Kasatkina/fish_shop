@@ -122,15 +122,20 @@ def handle_cart_button(update, context, moltin):
     """Show cart to customer."""
 
     text = ''
+    keyboard = []
     for item in moltin.get_cart_items(update.effective_chat.id)['data']:
         item_price = f"Price: {format_price(item['unit_price']['amount'])} per pound"
         item_quantity = f"{item['quantity']} pounds in cart for {format_price(item['value']['amount'])}"
         text += f"*{item['name']}*\n{item['description']}\n{item_price}\n{item_quantity}\n\n"
+        keyboard.append([InlineKeyboardButton(f"Delete {item['name']} from cart", callback_data=item['id'])])
 
-    total_sum = moltin.get_cart(update.effective_chat.id)['data']['meta']['display_price']['with_tax']['amount']
-    text += f'*Total: {format_price(total_sum)}*'
+    if text:
+        total_sum = moltin.get_cart(update.effective_chat.id)['data']['meta']['display_price']['with_tax']['amount']
+        text += f'*Total: {format_price(total_sum)}*'
+    else:
+        text = 'Cart is empty.'
 
-    keyboard = [[get_back_button()]]
+    keyboard.append([get_back_button()])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     context.bot.send_message(
@@ -163,7 +168,11 @@ def handle_cart_menu(update, context, moltin):
         chat_id=update.effective_chat.id,
         message_id=query.message.message_id
     )
-    return handle_start_command(update, context, moltin)
+    if query.data == 'back':
+        return handle_start_command(update, context, moltin)
+
+    moltin.delete_item_from_cart(update.effective_chat.id, query.data)
+    return handle_cart_button(update, context, moltin)
 
 
 def handle_description_button(update, context, moltin):
@@ -211,7 +220,7 @@ def handle_description_menu(update, context, moltin):
 
     if query.data not in ['back', 'cart']:
         product_id, product_quantity = query.data.split()
-        moltin.add_product_to_cart(update.effective_chat.id, product_id, int(product_quantity))
+        moltin.add_item_to_cart(update.effective_chat.id, product_id, int(product_quantity))
         query.answer('Product added to cart.')
         return HANDLE_DESCRIPTION
 
