@@ -4,18 +4,20 @@
 
 import logging
 import os
+from contextlib import suppress
 from functools import partial
 
 import redis
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, CommandHandler, Filters, MessageHandler, Updater
 
 from moltin import Moltin
 from telegram_log_handler import TelegramLogsHandler
 
 
-START, HANDLE_MENU, HANDLE_DESCRIPTION = range(1, 4)
+START, HANDLE_MENU, HANDLE_DESCRIPTION, HANDLE_CART = range(1, 5)
 
 logger = logging.getLogger('fish_shop_bot.logger')
 
@@ -30,7 +32,7 @@ def run_telegram_bot(tg_bot_token, moltin, redis_client):
     dispatcher.add_handler(CallbackQueryHandler(handler))
     dispatcher.add_handler(MessageHandler(Filters.text, handler))
     dispatcher.add_handler(CommandHandler('start', handler))
-    dispatcher.add_error_handler(handle_error)
+    # dispatcher.add_error_handler(handle_error)
 
     updater.start_polling()
     updater.idle()
@@ -50,25 +52,31 @@ def handle_users_reply(update, context, moltin, redis_client):
 
     states_functions = {
         START: handle_start_command,
-        HANDLE_MENU: handle_menu,
-        HANDLE_DESCRIPTION: handle_description
+        HANDLE_MENU: handle_main_menu,
+        HANDLE_DESCRIPTION: handle_description_menu,
+        HANDLE_CART: handle_cart_menu
     }
     user_state = START if user_reply == '/start' else redis_client.get(chat_id) or START
     state_handler = states_functions[int(user_state)]
 
-    try:
-        next_state = state_handler(update, context, moltin)
-        redis_client.set(chat_id, next_state)
-    except Exception as err:
-        print(err)
+    next_state = state_handler(update, context, moltin)
+    redis_client.set(chat_id, next_state)
 
 
 def handle_start_command(update, context, moltin):
     """Handle the START state."""
 
+    query = update.callback_query
+    if not query:
+        with suppress(BadRequest):
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=update.message.message_id-1
+            )
+
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Hello! I'm a fish shop bot!\nPress a button:",
+        text="Press a button:",
         reply_markup=create_keyboard_markup(moltin)
     )
     return HANDLE_MENU
@@ -82,23 +90,91 @@ def create_keyboard_markup(moltin):
         for product in moltin.get_all_products()['data']
         if product['type'] == 'product'
     ]
+    keyboard.append([get_cart_button()])
     return InlineKeyboardMarkup(keyboard)
 
 
-def handle_menu(update, context, moltin):
+def get_cart_button():
+    """Make button to go to cart."""
+    return InlineKeyboardButton('Shopping Cart', callback_data='cart')
+
+
+def handle_main_menu(update, context, moltin):
     """Handle the HANDLE_MENU state."""
 
     query = update.callback_query
     if not query:
-        return START
+        return handle_start_command(update, context, moltin)
 
     query.answer()
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=query.message.message_id
+    )
 
+    if query.data == 'cart':
+        return handle_cart_button(update, context, moltin)
+
+    return handle_description_button(update, context, moltin)
+
+
+def handle_cart_button(update, context, moltin):
+    """Show cart to customer."""
+
+    text = ''
+    for item in moltin.get_cart_items(update.effective_chat.id)['data']:
+        item_price = f"Price: {format_price(item['unit_price']['amount'])} per pound"
+        item_quantity = f"{item['quantity']} pounds in cart for {format_price(item['value']['amount'])}"
+        text += f"*{item['name']}*\n{item['description']}\n{item_price}\n{item_quantity}\n\n"
+
+    total_sum = moltin.get_cart(update.effective_chat.id)['data']['meta']['display_price']['with_tax']['amount']
+    text += f'*Total: {format_price(total_sum)}*'
+
+    keyboard = [[get_back_button()]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=text,
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+    return HANDLE_CART
+
+
+def format_price(price):
+    return f'${price / 100}'
+
+
+def get_back_button():
+    """Make button to back to products list."""
+    return InlineKeyboardButton('«‎ Back to Products List', callback_data='back')
+
+
+def handle_cart_menu(update, context, moltin):
+    """Handle the HANDLE_CART state."""
+
+    query = update.callback_query
+    if not query:
+        return handle_start_command(update, context, moltin)
+
+    query.answer()
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=query.message.message_id
+    )
+    return handle_start_command(update, context, moltin)
+
+
+def handle_description_button(update, context, moltin):
+    """Show product description to customer."""
+
+    query = update.callback_query
     product_id = query.data
     product_details = moltin.get_product_by_id(product_id)['data']
     product_name = product_details['name']
     product_description = product_details['description']
-    product_price = f"Price: ${product_details['price'][0]['amount'] / 100} per pound"
+    product_price = f"Price: {format_price(product_details['price'][0]['amount'])} per pound"
 
     image_id = product_details['relationships']['main_image']['data']['id']
     image = moltin.get_image_by_id(image_id)
@@ -110,7 +186,8 @@ def handle_menu(update, context, moltin):
             InlineKeyboardButton('10 pounds', callback_data=f'{product_id} 10')
         ],
         [
-            InlineKeyboardButton('Back', callback_data='back')
+            get_cart_button(),
+            get_back_button()
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -122,43 +199,35 @@ def handle_menu(update, context, moltin):
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
-
-    context.bot.delete_message(
-        chat_id=update.effective_chat.id,
-        message_id=query.message.message_id
-    )
     return HANDLE_DESCRIPTION
 
 
-def handle_description(update, context, moltin):
+def handle_description_menu(update, context, moltin):
     """Handle the HANDLE_DESCRIPTION state."""
 
     query = update.callback_query
     if not query:
-        return START
+        return handle_start_command(update, context, moltin)
+
+    if query.data not in ['back', 'cart']:
+        product_id, product_quantity = query.data.split()
+        moltin.add_product_to_cart(update.effective_chat.id, product_id, int(product_quantity))
+        query.answer('Product added to cart.')
+        return HANDLE_DESCRIPTION
+
+    query.answer()
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=query.message.message_id
+    )
 
     if query.data == 'back':
-        query.answer()
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text='Press a button:',
-            reply_markup=create_keyboard_markup(moltin)
-        )
+        return handle_start_command(update, context, moltin)
 
-        context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=query.message.message_id
-        )
-        return HANDLE_MENU
-
-    product_id, product_quantity = query.data.split()
-    moltin.add_product_to_cart(update.effective_chat.id, product_id, int(product_quantity))
-    query.answer('Product added to cart.')
-    print(moltin.get_cart_items(update.effective_chat.id))
-    return HANDLE_DESCRIPTION
+    return handle_cart_button(update, context, moltin)
 
 
-def handle_error(update, context, error):
+def handle_error(update, error):
     """Handle errors."""
 
     logger.warning(f'Update "{update}" вызвал ошибку "{error}"')
