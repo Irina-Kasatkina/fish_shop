@@ -15,7 +15,7 @@ from moltin import Moltin
 from telegram_log_handler import TelegramLogsHandler
 
 
-START, HANDLE_MENU = range(1, 3)
+START, HANDLE_MENU, HANDLE_DESCRIPTION = range(1, 4)
 
 logger = logging.getLogger('fish_shop_bot.logger')
 
@@ -50,7 +50,8 @@ def handle_users_reply(update, context, moltin, redis_client):
 
     states_functions = {
         START: handle_start_command,
-        HANDLE_MENU: handle_menu
+        HANDLE_MENU: handle_menu,
+        HANDLE_DESCRIPTION: handle_description
     }
     user_state = START if user_reply == '/start' else redis_client.get(chat_id) or START
     state_handler = states_functions[int(user_state)]
@@ -67,10 +68,21 @@ def handle_start_command(update, context, moltin):
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="Hello! I'm a fish shop bot!\nPress a button.",
+        text="Hello! I'm a fish shop bot!\nPress a button:",
         reply_markup=create_keyboard_markup(moltin)
     )
     return HANDLE_MENU
+
+
+def create_keyboard_markup(moltin):
+    """Create an InlineKeyboardMarkup with a list of all shop products."""
+
+    keyboard = [
+        [InlineKeyboardButton(product['name'], callback_data=product['id'])]
+        for product in moltin.get_all_products()['data']
+        if product['type'] == 'product'
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
 
 def handle_menu(update, context, moltin):
@@ -91,29 +103,44 @@ def handle_menu(update, context, moltin):
     image_id = product_details['relationships']['main_image']['data']['id']
     image = moltin.get_image_by_id(image_id)
 
+    keyboard = [[InlineKeyboardButton('Back', callback_data='back')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     context.bot.send_photo(
         chat_id=update.effective_chat.id,
         photo=image,
         caption=f'\n\n*{product_name}*\n\n{product_description}\n\n{product_price}',
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=reply_markup
     )
 
     context.bot.delete_message(
         chat_id=update.effective_chat.id,
         message_id=query.message.message_id
     )
-    return START
+    return HANDLE_DESCRIPTION
 
 
-def create_keyboard_markup(moltin):
-    """Create an InlineKeyboardMarkup with a list of all shop products."""
+def handle_description(update, context, moltin):
+    """Handle the HANDLE_DESCRIPTION state."""
 
-    keyboard = [
-        [InlineKeyboardButton(product['name'], callback_data=product['id'])]
-        for product in moltin.get_all_products()['data']
-        if product['type'] == 'product'
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    if not update.callback_query:
+        return START
+
+    query = update.callback_query
+    query.answer()
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Press a button:',
+        reply_markup=create_keyboard_markup(moltin)
+    )
+
+    context.bot.delete_message(
+        chat_id=update.effective_chat.id,
+        message_id=query.message.message_id
+    )
+    return HANDLE_MENU
 
 
 def handle_error(update, context, error):
