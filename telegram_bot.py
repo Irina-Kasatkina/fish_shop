@@ -88,13 +88,13 @@ def create_keyboard_markup(moltin):
 def handle_menu(update, context, moltin):
     """Handle the HANDLE_MENU state."""
 
-    if not update.callback_query:
+    query = update.callback_query
+    if not query:
         return START
 
-    query = update.callback_query
     query.answer()
 
-    product_id = update.callback_query.data
+    product_id = query.data
     product_details = moltin.get_product_by_id(product_id)['data']
     product_name = product_details['name']
     product_description = product_details['description']
@@ -103,7 +103,16 @@ def handle_menu(update, context, moltin):
     image_id = product_details['relationships']['main_image']['data']['id']
     image = moltin.get_image_by_id(image_id)
 
-    keyboard = [[InlineKeyboardButton('Back', callback_data='back')]]
+    keyboard = [
+        [
+            InlineKeyboardButton('1 pound', callback_data=f'{product_id} 1'),
+            InlineKeyboardButton('5 pounds', callback_data=f'{product_id} 5'),
+            InlineKeyboardButton('10 pounds', callback_data=f'{product_id} 10')
+        ],
+        [
+            InlineKeyboardButton('Back', callback_data='back')
+        ]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     context.bot.send_photo(
@@ -124,23 +133,29 @@ def handle_menu(update, context, moltin):
 def handle_description(update, context, moltin):
     """Handle the HANDLE_DESCRIPTION state."""
 
-    if not update.callback_query:
+    query = update.callback_query
+    if not query:
         return START
 
-    query = update.callback_query
-    query.answer()
+    if query.data == 'back':
+        query.answer()
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Press a button:',
+            reply_markup=create_keyboard_markup(moltin)
+        )
 
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Press a button:',
-        reply_markup=create_keyboard_markup(moltin)
-    )
+        context.bot.delete_message(
+            chat_id=update.effective_chat.id,
+            message_id=query.message.message_id
+        )
+        return HANDLE_MENU
 
-    context.bot.delete_message(
-        chat_id=update.effective_chat.id,
-        message_id=query.message.message_id
-    )
-    return HANDLE_MENU
+    product_id, product_quantity = query.data.split()
+    moltin.add_product_to_cart(update.effective_chat.id, product_id, int(product_quantity))
+    query.answer('Product added to cart.')
+    print(moltin.get_cart_items(update.effective_chat.id))
+    return HANDLE_DESCRIPTION
 
 
 def handle_error(update, context, error):

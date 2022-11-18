@@ -9,7 +9,7 @@ import requests
 
 
 class Moltin:
-    """Grant access to the Moltin service API."""
+    """Grant access to Moltin API."""
 
     def __init__(self, client_id, client_secret):
         self.client_id = client_id
