@@ -9,7 +9,7 @@ import requests
 
 
 class Moltin:
-    """Grant access to Moltin API."""
+    """Wrap Moltin API."""
 
     def __init__(self, client_id, client_secret):
         self.client_id = client_id
@@ -102,7 +102,7 @@ class Moltin:
         return response.json()
 
     def get_image_by_id(self, image_id):
-        """Get image from Miltin API."""
+        """Get image from Moltin API."""
 
         url = f'https://api.moltin.com/v2/files/{image_id}'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}

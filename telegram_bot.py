@@ -33,7 +33,7 @@ def run_telegram_bot(tg_bot_token, moltin, redis_client):
     dispatcher.add_handler(CallbackQueryHandler(handler))
     dispatcher.add_handler(MessageHandler(Filters.text, handler))
     dispatcher.add_handler(CommandHandler('start', handler))
-    # dispatcher.add_error_handler(handle_error)
+    dispatcher.add_error_handler(handle_error)
 
     updater.start_polling()
     updater.idle()
@@ -204,7 +204,6 @@ def handle_email_message(update, context, moltin):
 
     email = match.groups()[0]
     moltin.get_or_create_customer(update.effective_chat.id, email)
-    print(moltin.get_or_create_customer(update.effective_chat.id, email))
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=f"Thanks! We've received your email: {email}.\nThe sales team will write to you soon."
