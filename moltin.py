@@ -37,6 +37,9 @@ class Moltin:
         self._token = token_details['access_token']
         return self._token
 
+    def get_headers(self):
+        return {'Authorization': f'Bearer {self.get_access_token()}'}
+
     def create_products_from_json(self, json_file_path):
         """Create shop products from json file."""
 
@@ -50,10 +53,8 @@ class Moltin:
         """Create a product in the shop."""
 
         url = 'https://api.moltin.com/v2/products'
-        headers = {
-            'Authorization': f'Bearer {self.get_access_token()}',
-            'Content-Type': 'application/json',
-        }
+        headers = self.get_headers()
+        headers['Content-Type'] = 'application/json'
         json_data = {
             'data': {
                 'type': 'product',
@@ -92,14 +93,17 @@ class Moltin:
                         break
 
     def create_image(self, image_url):
+        """Create image in Moltin database."""
+
         url = 'https://api.moltin.com/v2/files'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
         files = {'file_location': (None, image_url)}
-        response = requests.post(url, headers=headers, files=files)
+        response = requests.post(url, headers=self.get_headers(), files=files)
         response.raise_for_status()
         return response.json()
 
     def get_image_by_id(self, image_id):
+        """Get image from Miltin API."""
+
         url = f'https://api.moltin.com/v2/files/{image_id}'
         headers = {'Authorization': f'Bearer {self.get_access_token()}'}
         response = requests.get(url, headers=headers)
@@ -107,15 +111,16 @@ class Moltin:
         return response.json()['data']['link']['href']
 
     def link_image_to_product(self, product_id, image_id):
+        """Create link between product and image."""
+
         url = f'https://api.moltin.com/v2/products/{product_id}/relationships/main-image'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
         json_data = {
             'data': {
                 'type': 'main_image',
                 'id': image_id,
             },
         }
-        response = requests.post(url, headers=headers, json=json_data)
+        response = requests.post(url, headers=self.get_headers(), json=json_data)
         response.raise_for_status()
         return response.json()
 
@@ -123,8 +128,7 @@ class Moltin:
         """Get a list of all shop products."""
 
         url = 'https://api.moltin.com/v2/products'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=self.get_headers())
         response.raise_for_status()
         return response.json()
 
@@ -132,19 +136,16 @@ class Moltin:
         """Get a product by its id."""
 
         url = f'https://api.moltin.com/v2/products/{product_id}'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=self.get_headers())
         response.raise_for_status()
         return response.json()
 
-    def add_item_to_cart(self, user_id, product_id, quantity):
-        """Put item to user's cart in specified quantity."""
+    def add_item_to_cart(self, customer_id, product_id, quantity):
+        """Put item to customer's cart in specified quantity."""
 
-        url = f'https://api.moltin.com/v2/carts/{user_id}/items'
-        headers = {
-            'Authorization': f'Bearer {self.get_access_token()}',
-            'X-MOLTIN-CURRENCY': 'USD',
-        }
+        url = f'https://api.moltin.com/v2/carts/{customer_id}/items'
+        headers = self.get_headers()
+        headers['X-MOLTIN-CURRENCY'] = 'USD'
         json_data = {
             'data': {
                 'id': product_id,
@@ -156,28 +157,50 @@ class Moltin:
         response.raise_for_status()
         return response.json()
 
-    def delete_item_from_cart(self, user_id, product_id):
-        """Exclude item from user's cart."""
+    def delete_item_from_cart(self, customer_id, product_id):
+        """Exclude item from customer's cart."""
 
-        url = f'https://api.moltin.com/v2/carts/{user_id}/items/{product_id}'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
-        response = requests.delete(url, headers=headers)
+        url = f'https://api.moltin.com/v2/carts/{customer_id}/items/{product_id}'
+        response = requests.delete(url, headers=self.get_headers())
         response.raise_for_status()
 
-    def get_cart(self, user_id):
-        """Get user's cart."""
+    def get_cart(self, customer_id):
+        """Get customer's cart."""
 
-        url = f'https://api.moltin.com/v2/carts/{user_id}'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
-        response = requests.get(url, headers=headers)
+        url = f'https://api.moltin.com/v2/carts/{customer_id}'
+        response = requests.get(url, headers=self.get_headers())
         response.raise_for_status()
         return response.json()
 
-    def get_cart_items(self, user_id):
-        """Get list of items in user's cart."""
+    def get_cart_items(self, customer_id):
+        """Get list of items in customer's cart."""
 
-        url = f'https://api.moltin.com/v2/carts/{user_id}/items'
-        headers = {'Authorization': f'Bearer {self.get_access_token()}'}
-        response = requests.get(url, headers=headers)
+        url = f'https://api.moltin.com/v2/carts/{customer_id}/items'
+        response = requests.get(url, headers=self.get_headers())
         response.raise_for_status()
         return response.json()
+
+    def get_or_create_customer(self, customer_id, customer_email):
+        """Write customer's data to Moltin database."""
+
+        url = 'https://api.moltin.com/v2/customers'
+        headers = self.get_headers()
+        headers['Content-Type'] = 'application/json' 
+        params = {'filter': f'eq(email,{customer_email})'}
+        response = requests.get(url, params=params, headers=headers)
+        response.raise_for_status()
+
+        customer_info = response.json()
+        if customer_info['data']:
+            return customer_info, False
+
+        json_data = {
+            'data': {
+                'type': 'customer',
+                'name': str(customer_id),
+                'email': customer_email
+            }
+        }
+        response = requests.post(url, headers=headers, json=json_data)
+        response.raise_for_status()
+        return response.json(), True
