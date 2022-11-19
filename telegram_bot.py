@@ -4,6 +4,7 @@
 
 import logging
 import os
+import re
 from contextlib import suppress
 from functools import partial
 
@@ -17,7 +18,7 @@ from moltin import Moltin
 from telegram_log_handler import TelegramLogsHandler
 
 
-START, HANDLE_MENU, HANDLE_DESCRIPTION, HANDLE_CART = range(1, 5)
+START, HANDLE_MENU, HANDLE_DESCRIPTION, HANDLE_CART, WAITING_EMAIL = range(1, 6)
 
 logger = logging.getLogger('fish_shop_bot.logger')
 
@@ -54,7 +55,8 @@ def handle_users_reply(update, context, moltin, redis_client):
         START: handle_start_command,
         HANDLE_MENU: handle_main_menu,
         HANDLE_DESCRIPTION: handle_description_menu,
-        HANDLE_CART: handle_cart_menu
+        HANDLE_CART: handle_cart_menu,
+        WAITING_EMAIL: handle_email_message
     }
     user_state = START if user_reply == '/start' else redis_client.get(chat_id) or START
     state_handler = states_functions[int(user_state)]
@@ -132,10 +134,16 @@ def handle_cart_button(update, context, moltin):
     if text:
         total_sum = moltin.get_cart(update.effective_chat.id)['data']['meta']['display_price']['with_tax']['amount']
         text += f'*Total: {format_price(total_sum)}*'
+        keyboard.append(
+            [
+                InlineKeyboardButton('Payment', callback_data='payment'),
+                get_back_button()
+            ]
+        )
     else:
         text = 'Cart is empty.'
+        keyboard.append([get_back_button()])
 
-    keyboard.append([get_back_button()])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     context.bot.send_message(
@@ -171,8 +179,35 @@ def handle_cart_menu(update, context, moltin):
     if query.data == 'back':
         return handle_start_command(update, context, moltin)
 
+    if query.data == 'payment':
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Please send us your email:'
+        )
+        return WAITING_EMAIL
+
     moltin.delete_item_from_cart(update.effective_chat.id, query.data)
     return handle_cart_button(update, context, moltin)
+
+
+def handle_email_message(update, context, moltin):
+    """Handle the WAITING_EMAIL state."""
+
+    pattern = r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'
+    match = re.match(pattern, update.message.text)
+    if not match:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Email spelling error.\nPlease send us your email:'
+        )
+        return WAITING_EMAIL
+
+    email = match.groups()[0]
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"Thanks! We've received your email: {email}.\nThe sales team will write to you soon."
+    )
+    return START
 
 
 def handle_description_button(update, context, moltin):
